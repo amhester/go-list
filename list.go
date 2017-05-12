@@ -1,8 +1,11 @@
 package list
 
 import (
+	"runtime"
 	"sync"
 )
+
+var defaultParallelism = int(runtime.NumCPU())
 
 //GenericLink is a container stucture for each item in the list.
 type GenericLink struct {
@@ -134,20 +137,30 @@ func (list *List) ForEach(fn func(val interface{}, idx int)) {
 }
 
 //ParallelForEach is the same as ForEach, but will run fn concurrently with goroutines, but will wait for all routines to stop.
-func (list *List) ParallelForEach(fn func(val interface{}, idx int)) {
+func (list *List) ParallelForEach(fn func(val interface{}, idx int), maxParallelism int) {
 	wg := &sync.WaitGroup{}
+	if maxParallelism < 1 {
+		maxParallelism = defaultParallelism
+	}
+	sema := make(chan bool, maxParallelism)
+	for i := 0; i < maxParallelism; i++ {
+		sema <- true
+	}
 	i := 0
 	node := list.root
 	for node != nil {
+		<-sema
 		wg.Add(1)
-		go func(wg_ *sync.WaitGroup, val_ interface{}, idx_ int) {
+		go func(wg_ *sync.WaitGroup, sema_ chan bool, val_ interface{}, idx_ int) {
 			fn(val_, idx_)
 			wg_.Done()
-		}(wg, node.Value, i)
+			sema_ <- true
+		}(wg, sema, node.Value, i)
 		node = node.Next
 		i++
 	}
 	wg.Wait()
+	close(sema)
 }
 
 //Map iterates over list calling fn with the value and index of each iteration, pushing the result onto a new list which is returned.
@@ -165,19 +178,28 @@ func (list *List) Map(fn func(val interface{}, idx int) interface{}) *List {
 }
 
 //ParallelMap is the same as Map, but will run fn concurrently with goroutines, but will wait for all routines to stop. Order of returned list is not gaurunteed.
-func (list *List) ParallelMap(fn func(val interface{}, idx int) interface{}) *List {
+func (list *List) ParallelMap(fn func(val interface{}, idx int) interface{}, maxParallelism int) *List {
 	wg := &sync.WaitGroup{}
+	if maxParallelism < 1 {
+		maxParallelism = defaultParallelism
+	}
+	sema := make(chan bool, maxParallelism)
+	for i := 0; i < maxParallelism; i++ {
+		sema <- true
+	}
 	c := make(chan interface{}, list.Length)
 	res := &List{}
 	i := 0
 	node := list.root
 	for node != nil {
+		<-sema
 		wg.Add(1)
-		go func(wg_ *sync.WaitGroup, c_ chan interface{}, val_ interface{}, idx_ int) {
+		go func(wg_ *sync.WaitGroup, c_ chan interface{}, sema_ chan bool, val_ interface{}, idx_ int) {
 			val := fn(val_, idx_)
 			c <- val
 			wg_.Done()
-		}(wg, c, node.Value, i)
+			sema_ <- true
+		}(wg, c, sema, node.Value, i)
 		node = node.Next
 		i++
 	}

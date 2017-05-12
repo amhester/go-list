@@ -177,7 +177,7 @@ func TestListParallelForEach(t *testing.T) {
 			t.Log("Incorrect value at position in list.", val, idx+1)
 			t.Fail()
 		}
-	})
+	}, 0)
 }
 
 func TestListMap(t *testing.T) {
@@ -211,7 +211,7 @@ func TestListParallelMap(t *testing.T) {
 	list.Push(3)
 	ls := list.ParallelMap(func(val interface{}, idx int) interface{} {
 		return val.(int) * val.(int)
-	})
+	}, 0)
 	if ls == nil {
 		t.Log("Mapped list is nil.")
 		t.Fail()
