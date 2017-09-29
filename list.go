@@ -142,19 +142,19 @@ func (list *List) ParallelForEach(fn func(val interface{}, idx int), maxParallel
 	if maxParallelism < 1 {
 		maxParallelism = defaultParallelism
 	}
-	sema := make(chan bool, maxParallelism)
+	sema := make(chan struct{}, maxParallelism)
 	for i := 0; i < maxParallelism; i++ {
-		sema <- true
+		sema <- struct{}{}
 	}
 	i := 0
 	node := list.root
 	for node != nil {
 		<-sema
 		wg.Add(1)
-		go func(wg_ *sync.WaitGroup, sema_ chan bool, val_ interface{}, idx_ int) {
+		go func(wg_ *sync.WaitGroup, sema_ chan struct{}, val_ interface{}, idx_ int) {
 			fn(val_, idx_)
 			wg_.Done()
-			sema_ <- true
+			sema_ <- struct{}{}
 		}(wg, sema, node.Value, i)
 		node = node.Next
 		i++
@@ -183,9 +183,9 @@ func (list *List) ParallelMap(fn func(val interface{}, idx int) interface{}, max
 	if maxParallelism < 1 {
 		maxParallelism = defaultParallelism
 	}
-	sema := make(chan bool, maxParallelism)
+	sema := make(chan struct{}, maxParallelism)
 	for i := 0; i < maxParallelism; i++ {
-		sema <- true
+		sema <- struct{}{}
 	}
 	c := make(chan interface{}, list.Length)
 	res := &List{}
@@ -194,11 +194,11 @@ func (list *List) ParallelMap(fn func(val interface{}, idx int) interface{}, max
 	for node != nil {
 		<-sema
 		wg.Add(1)
-		go func(wg_ *sync.WaitGroup, c_ chan interface{}, sema_ chan bool, val_ interface{}, idx_ int) {
+		go func(wg_ *sync.WaitGroup, c_ chan interface{}, sema_ chan struct{}, val_ interface{}, idx_ int) {
 			val := fn(val_, idx_)
 			c <- val
 			wg_.Done()
-			sema_ <- true
+			sema_ <- struct{}{}
 		}(wg, c, sema, node.Value, i)
 		node = node.Next
 		i++
